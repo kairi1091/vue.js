@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>  
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+
+<body>
+
+<div id="app">
+  <apikey-input @api-key-input ="addKeys"></apikey-input>
+  <prefecture-checkbox :prefectures = prefData @on-prefecture-check = "changeGraph"></prefecture-checkbox>
+  <population-grah :populationdata = jsonData :number = prefCode></population-grah>
+</div>
+
+<script>
+const ApikeyInput = {
+  data(){
+    return{
+     input_key :'',
+    };
+  },
+  template:`
+   <h2>API Key Input</h2>
+   <input type="text" v-model="input_key">
+   <button @click = "$emit('api-key-input',input_key)">読み込み</button>
+   `
+};
+const PrefectureCheckbox ={
+  props:{
+    prefectures:null,
+  },
+  template:`
+   <h2>Prefecture Checkbox</h2>
+   <p v-if="!prefectures">Loading ...</p>
+   <div v-else>
+      <span v-for="pref in prefectures">
+        {{ pref.prefName }}
+        <input v-on:change="$emit('onPrefectureCheck',$event.target.checked, pref.prefCode)"type="checkbox">
+      </span>
+   </div>
+   `
+};
+const PopulationGrah = {
+  props:{
+    populationdata:null,
+    number:'1',
+  },
+  template:`
+  <h2>Prefecture Code: {{ number }}</h2>
+  <p v-if="!populationdata">Loading ...</p>
+  <div v-else>
+    <ul>
+      <li v-for="prefData in populationdata">
+        {{ prefData.year }} : <span v-bind:style="{ display: 'inline-block', 'background-color': 'gray', width: (prefData.value / 10000) + 'px', height: '10px' }"></span>
+      </li>
+    </ul>
+  </div>
+  `
+};
+Vue.createApp({
+  data() {
+    return {
+      apiKey: '',
+      prefCode: 1,
+      jsonData: null,
+      prefData: null,
+    };
+  },
+  components:{
+    ApikeyInput,
+    PrefectureCheckbox,
+    PopulationGrah
+  },
+  methods: {
+    changeGraph:function(checked, pref){
+      if (checked) {
+        this.prefCode = pref;
+        this.fetchData();
+      }
+    },
+    addKeys:function(input_key){
+      console.log("OK");
+      this.apiKey = input_key;
+      this.fetchPrefectureNames();
+      this.fetchData();
+    },
+    async fetchPrefectureNames() {
+      const options = {
+        headers: {
+          'X-API-KEY': this.apiKey,
+        },
+      };
+
+      const res = await fetch(
+        'https://opendata.resas-portal.go.jp/api/v1/prefectures',
+        options,
+      );
+
+      this.prefData = (await res.json()).result;
+    },
+
+    async fetchData() {
+      this.jsonData = null;
+      
+      const options = {
+        headers: {
+          'X-API-KEY': this.apiKey,
+        },
+      };
+      
+      const res = await fetch(
+        `https://opendata.resas-portal.go.jp/api/v1/population/composition/perYear?cityCode=-&prefCode=${this.prefCode}`,
+        options,
+      );
+      
+      this.jsonData = await res.json();
+      // 事前の jsonData すなわち RESAS API の生のデータから ...
+      //
+      // .result -> result というプロパティをたどり ...
+      // .data   -> さらに data というプロパティをたどり ...
+      // [0]     -> ↑が配列になるので、その最初の要素を取り ...
+      // .data   -> 年 / 数値だけの配列まで取り出す
+      this.jsonData = this.jsonData.result.data[0].data;
+    }
+  },
+}).mount('#app')
+</script>
+
+</body>
+
+</html>
